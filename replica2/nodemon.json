@@ -1,0 +1,7 @@
+{
+  "watch": ["server.js"],
+  "ignore": ["data/*", "node_modules/*", "*.json"],
+  "ext": "js",
+  "delay": 1000,
+  "exec": "stdbuf -o0 node"
+}
