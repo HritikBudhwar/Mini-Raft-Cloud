@@ -1,5 +1,5 @@
 {
-  "currentTerm": 228,
-  "votedFor": null,
+  "currentTerm": 233,
+  "votedFor": "replica2",
   "commitIndex": 11
 }
