@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Distributed Drawing Board</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    header {
+      background: #16213e;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #0f3460;
+    }
+    
+    h1 {
+      font-size: 1.5rem;
+      background: linear-gradient(135deg, #e94560, #0f3460);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .status {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #0f3460;
+      border-radius: 20px;
+      font-size: 0.85rem;
+    }
+    
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #4ade80;
+    }
+    
+    .status-dot.disconnected {
+      background: #ef4444;
+    }
+    
+    .status-dot.connecting {
+      background: #fbbf24;
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .toolbar {
+      background: #16213e;
+      padding: 1rem 2rem;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #0f3460;
+    }
+    
+    .tool-group {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    
+    .tool-group label {
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+    
+    .color-picker {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: none;
+    }
+    
+    .color-picker::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    
+    .color-picker::-webkit-color-swatch {
+      border: 2px solid #0f3460;
+      border-radius: 8px;
+    }
+    
+    input[type="range"] {
+      width: 100px;
+      accent-color: #e94560;
+    }
+    
+    button {
+      padding: 0.5rem 1rem;
+      background: #e94560;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    
+    button:hover {
+      background: #d63850;
+    }
+    
+    button.secondary {
+      background: #0f3460;
+    }
+    
+    button.secondary:hover {
+      background: #1a4a7a;
+    }
+    
+    .canvas-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem;
+      overflow: hidden;
+    }
+    
+    canvas {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      cursor: crosshair;
+      max-width: 100%;
+      max-height: 100%;
+    }
+    
+    .cluster-panel {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      background: #16213e;
+      border-radius: 12px;
+      padding: 1rem;
+      min-width: 250px;
+      border: 1px solid #0f3460;
+    }
+    
+    .cluster-panel h3 {
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+      color: #94a3b8;
+    }
+    
+    .replica-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .replica-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem;
+      background: #0f3460;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    
+    .replica-item .name {
+      font-weight: 500;
+    }
+    
+    .replica-item .role {
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+    
+    .replica-item .role.leader {
+      background: #4ade80;
+      color: #000;
+    }
+    
+    .replica-item .role.follower {
+      background: #3b82f6;
+      color: #fff;
+    }
+    
+    .replica-item .role.offline {
+      background: #ef4444;
+      color: #fff;
+    }
+    
+    .log-panel {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      background: #16213e;
+      border-radius: 12px;
+      padding: 1rem;
+      max-width: 350px;
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #0f3460;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.75rem;
+    }
+    
+    .log-panel h3 {
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+      color: #94a3b8;
+    }
+    
+    .log-entry {
+      padding: 0.25rem 0;
+      border-bottom: 1px solid #0f3460;
+      color: #94a3b8;
+    }
+    
+    .log-entry.info { color: #3b82f6; }
+    .log-entry.success { color: #4ade80; }
+    .log-entry.warning { color: #fbbf24; }
+    .log-entry.error { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎨 Distributed Drawing Board</h1>
+    <div class="status">
+      <div class="status-item">
+        <div class="status-dot" id="connectionDot"></div>
+        <span id="connectionStatus">Connecting...</span>
+      </div>
+      <div class="status-item">
+        <span>Leader: </span>
+        <strong id="leaderDisplay">--</strong>
+      </div>
+      <div class="status-item">
+        <span>Term: </span>
+        <strong id="termDisplay">--</strong>
+      </div>
+    </div>
+  </header>
+  
+  <div class="toolbar">
+    <div class="tool-group">
+      <label>Color:</label>
+      <input type="color" id="colorPicker" class="color-picker" value="#e94560">
+    </div>
+    <div class="tool-group">
+      <label>Size:</label>
+      <input type="range" id="brushSize" min="1" max="50" value="5">
+      <span id="sizeDisplay">5px</span>
+    </div>
+    <div class="tool-group">
+      <button id="clearBtn" class="secondary">Clear Canvas</button>
+    </div>
+  </div>
+  
+  <div class="canvas-container">
+    <canvas id="canvas" width="1200" height="700"></canvas>
+  </div>
+  
+  <div class="cluster-panel">
+    <h3>⚡ Cluster Status</h3>
+    <div class="replica-list" id="replicaList">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+  
+  <div class="log-panel">
+    <h3>📋 Event Log</h3>
+    <div id="logEntries">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <script>
+    // ==================== CONFIGURATION ====================
+    const GATEWAY_URL = window.location.hostname === 'localhost' 
+      ? 'ws://localhost:3000' 
+      : `ws://${window.location.hostname}:3000`;
+    const GATEWAY_HTTP = GATEWAY_URL.replace('ws://', 'http://').replace('wss://', 'https://');
+    
+    // ==================== STATE ====================
+    let ws = null;
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+    let currentStroke = null;
+    let color = '#e94560';
+    let brushSize = 5;
+    
+    // Track remote drawing in progress (from other clients)
+    const remoteStrokes = new Map(); // strokeId -> {color, size, lastPoint}
+    
+    // ==================== DOM ELEMENTS ====================
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const connectionDot = document.getElementById('connectionDot');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const leaderDisplay = document.getElementById('leaderDisplay');
+    const termDisplay = document.getElementById('termDisplay');
+    const colorPicker = document.getElementById('colorPicker');
+    const brushSizeInput = document.getElementById('brushSize');
+    const sizeDisplay = document.getElementById('sizeDisplay');
+    const clearBtn = document.getElementById('clearBtn');
+    const replicaList = document.getElementById('replicaList');
+    const logEntries = document.getElementById('logEntries');
+    
+    // ==================== LOGGING ====================
+    function addLog(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logEntries.insertBefore(entry, logEntries.firstChild);
+      
+      // Keep only last 50 entries
+      while (logEntries.children.length > 50) {
+        logEntries.removeChild(logEntries.lastChild);
+      }
+    }
+    
+    // ==================== WEBSOCKET ====================
+    function connect() {
+      addLog('Connecting to gateway...', 'info');
+      connectionDot.className = 'status-dot connecting';
+      connectionStatus.textContent = 'Connecting...';
+      
+      ws = new WebSocket(GATEWAY_URL);
+      
+      ws.onopen = () => {
+        addLog('Connected to gateway', 'success');
+        connectionDot.className = 'status-dot';
+        connectionStatus.textContent = 'Connected';
+      };
+      
+      ws.onclose = () => {
+        addLog('Disconnected from gateway', 'warning');
+        connectionDot.className = 'status-dot disconnected';
+        connectionStatus.textContent = 'Disconnected';
+        
+        // Reconnect after delay
+        setTimeout(connect, 2000);
+      };
+      
+      ws.onerror = (error) => {
+        addLog('WebSocket error', 'error');
+      };
+      
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleMessage(data);
+      };
+    }
+    
+    function handleMessage(data) {
+      switch (data.type) {
+        case 'init':
+          addLog(`Received ${data.strokes.length} existing strokes`, 'info');
+          if (data.leader) {
+            leaderDisplay.textContent = data.leader;
+            termDisplay.textContent = data.term;
+          }
+          // Redraw all existing strokes
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          data.strokes.forEach(stroke => drawStroke(stroke));
+          break;
+          
+        case 'stroke':
+          addLog(`Stroke committed (index: ${data.index})`, 'success');
+          // Stroke is already drawn live, but redraw to ensure consistency
+          drawStroke(data.stroke);
+          break;
+          
+        case 'leader-change':
+          addLog(`New leader elected: ${data.leader} (term ${data.term})`, 'warning');
+          leaderDisplay.textContent = data.leader;
+          termDisplay.textContent = data.term;
+          break;
+          
+        case 'draw-start':
+          // Another client started drawing - store their stroke info
+          remoteStrokes.set(data.strokeId, {
+            color: data.color,
+            size: data.size,
+            lastPoint: data.point
+          });
+          break;
+          
+        case 'draw-point':
+          // Another client is drawing - render live
+          const remoteStroke = remoteStrokes.get(data.strokeId);
+          if (remoteStroke) {
+            ctx.beginPath();
+            ctx.strokeStyle = data.color;
+            ctx.lineWidth = data.size;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.moveTo(remoteStroke.lastPoint.x, remoteStroke.lastPoint.y);
+            ctx.lineTo(data.point.x, data.point.y);
+            ctx.stroke();
+            remoteStroke.lastPoint = data.point;
+          }
+          break;
+          
+        case 'draw-end':
+          // Another client finished drawing
+          remoteStrokes.delete(data.strokeId);
+          break;
+          
+        case 'pong':
+          // Heartbeat response
+          break;
+      }
+    }
+    
+    function sendStroke(stroke) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'stroke',
+          stroke
+        }));
+      }
+    }
+    
+    // ==================== DRAWING ====================
+    function drawStroke(stroke) {
+      if (!stroke.points || stroke.points.length < 2) return;
+      
+      ctx.beginPath();
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.size;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+      
+      ctx.stroke();
+    }
+    
+    function getCanvasCoordinates(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
+      if (e.touches) {
+        return {
+          x: (e.touches[0].clientX - rect.left) * scaleX,
+          y: (e.touches[0].clientY - rect.top) * scaleY
+        };
+      }
+      
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+    
+    function startDrawing(e) {
+      isDrawing = true;
+      const coords = getCanvasCoordinates(e);
+      lastX = coords.x;
+      lastY = coords.y;
+      
+      currentStroke = {
+        id: crypto.randomUUID(),
+        color: color,
+        size: brushSize,
+        points: [{ x: lastX, y: lastY }]
+      };
+      
+      // Send draw-start to other clients for live preview
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'draw-start',
+          strokeId: currentStroke.id,
+          point: { x: lastX, y: lastY },
+          color: color,
+          size: brushSize
+        }));
+      }
+    }
+    
+    function draw(e) {
+      if (!isDrawing) return;
+      e.preventDefault();
+      
+      const coords = getCanvasCoordinates(e);
+      
+      // Draw locally immediately
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(coords.x, coords.y);
+      ctx.stroke();
+      
+      // Add point to current stroke
+      currentStroke.points.push({ x: coords.x, y: coords.y });
+      
+      // Send live point to other clients
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'draw-point',
+          strokeId: currentStroke.id,
+          point: { x: coords.x, y: coords.y },
+          color: color,
+          size: brushSize
+        }));
+      }
+      
+      lastX = coords.x;
+      lastY = coords.y;
+    }
+    
+    function stopDrawing() {
+      if (!isDrawing) return;
+      isDrawing = false;
+      
+      // Send draw-end to other clients
+      if (ws && ws.readyState === WebSocket.OPEN && currentStroke) {
+        ws.send(JSON.stringify({
+          type: 'draw-end',
+          strokeId: currentStroke.id
+        }));
+      }
+      
+      if (currentStroke && currentStroke.points.length > 1) {
+        sendStroke(currentStroke);
+        addLog(`Sent stroke with ${currentStroke.points.length} points`, 'info');
+      }
+      
+      currentStroke = null;
+    }
+    
+    // ==================== CLUSTER STATUS ====================
+    async function updateClusterStatus() {
+      try {
+        const response = await fetch(`${GATEWAY_HTTP}/status`);
+        const status = await response.json();
+        
+        replicaList.innerHTML = status.replicas.map(replica => {
+          const name = replica.nodeId || replica.url.split('//')[1].split(':')[0];
+          let roleClass = 'offline';
+          let roleText = 'Offline';
+          
+          if (replica.healthy) {
+            roleClass = replica.role;
+            roleText = replica.role.charAt(0).toUpperCase() + replica.role.slice(1);
+          }
+          
+          return `
+            <div class="replica-item">
+              <span class="name">${name}</span>
+              <span class="role ${roleClass}">${roleText}</span>
+            </div>
+          `;
+        }).join('');
+      } catch (error) {
+        // Gateway not available
+      }
+    }
+    
+    // ==================== EVENT LISTENERS ====================
+    
+    // Mouse events
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    
+    // Touch events
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startDrawing(e);
+    });
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      draw(e);
+    });
+    canvas.addEventListener('touchend', stopDrawing);
+    
+    // Toolbar events
+    colorPicker.addEventListener('change', (e) => {
+      color = e.target.value;
+    });
+    
+    brushSizeInput.addEventListener('input', (e) => {
+      brushSize = parseInt(e.target.value);
+      sizeDisplay.textContent = `${brushSize}px`;
+    });
+    
+    clearBtn.addEventListener('click', () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      addLog('Canvas cleared locally', 'info');
+    });
+    
+    // ==================== INITIALIZATION ====================
+    connect();
+    setInterval(updateClusterStatus, 2000);
+    updateClusterStatus();
+    
+    // Send periodic pings to keep connection alive
+    setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000);
+  </script>
+</body>
+</html>
